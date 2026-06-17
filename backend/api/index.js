@@ -9,28 +9,29 @@ const app = express();
 connectDB();
 
 // Configure CORS for both local development and production
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://feesportal.vercel.app',
+  process.env.FRONTEND_URL
+].map(url => url?.replace(/\/$/, '')).filter(Boolean);
+
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:5173',
-      'https://feesportal.vercel.app',
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
