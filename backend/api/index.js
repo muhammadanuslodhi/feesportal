@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const connectDB = require('../config/db');
 const errorHandler = require('../middleware/errorMiddleware');
 
 const app = express();
@@ -10,8 +9,60 @@ const app = express();
 // Trust proxy (important for Vercel)
 app.set('trust proxy', 1);
 
-// Call connectDB after setting trust proxy
-connectDB();
+// Database connection flag
+let dbConnected = false;
+let dbConnecting = false;
+const connectToDatabase = require('../lib/mongodb');
+
+// Lazy database connection on first request (not on startup)
+const ensureDbConnection = async () => {
+  if (dbConnected) return true;
+  
+  if (dbConnecting) {
+    // Already trying to connect, wait for it
+    return new Promise((resolve, reject) => {
+      const checkInterval = setInterval(() => {
+        if (dbConnected) {
+          clearInterval(checkInterval);
+          resolve(true);
+        }
+      }, 100);
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        reject(new Error('Database connection timeout'));
+      }, 10000);
+    });
+  }
+
+  dbConnecting = true;
+  try {
+    await connectToDatabase();
+    dbConnected = true;
+    console.log('✅ Database connected on first request');
+    return true;
+  } catch (error) {
+    console.warn('⚠️  Database connection failed:', error.message);
+    dbConnecting = false;
+    return false; // Fail gracefully, allow requests to continue
+  }
+};
+
+// Middleware to attempt connection if not already done
+app.use(async (req, res, next) => {
+  // Don't block health check endpoints
+  if (req.path === '/' || req.path === '/health') {
+    return next();
+  }
+  
+  // Try to connect to DB, but don't fail if it doesn't work
+  if (!dbConnected && !dbConnecting) {
+    await ensureDbConnection().catch(err => {
+      console.warn('Database connection attempt failed for:', req.path);
+    });
+  }
+  
+  next();
+});
 
 // Build allowed origins list - with fallback for production
 const allowedOrigins = [
@@ -60,19 +111,48 @@ app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Health check endpoint (doesn't require DB)
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    environment: process.env.NODE_ENV,
+    database: dbConnected ? 'connected' : 'connecting or not connected',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Original root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    ok: true, 
+    name: 'Fees Portal API',
+    database: dbConnected ? 'connected' : 'connecting',
+    time: new Date().toISOString()
+  });
+});
+
+// API Routes
 app.use('/api/auth', require('../routes/authRoutes'));
 app.use('/api/areas', require('../routes/areaRoutes'));
 app.use('/api/students', require('../routes/studentRoutes'));
 app.use('/api/fees', require('../routes/feeRoutes'));
 app.use('/api/reports', require('../routes/reportRoutes'));
 
-app.get('/', (_, res) => res.json({ ok: true, name: 'Fees Portal API' }));
-
+// Error handler (must be last)
 app.use(errorHandler);
 
 module.exports = app;
 
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+  app.listen(PORT, () => {
+    console.log(`\n🚀 Fees Portal API running on http://localhost:${PORT}\n`);
+    console.log('📝 API Documentation:');
+    console.log(`   - Health: GET  /health`);
+    console.log(`   - Auth:   POST /api/auth/login`);
+    console.log(`   - Areas:  GET  /api/areas`);
+    console.log(`   - Students: GET /api/students`);
+    console.log(`   - Fees:   GET  /api/fees`);
+    console.log(`   - Reports: GET /api/reports\n`);
+  });
 }
