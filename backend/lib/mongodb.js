@@ -1,34 +1,32 @@
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const mockDatabase = require('./mock-db');
 
-let mongoServer = null;
 let cachedClient = null;
 let cachedDb = null;
+let isMockMode = false;
 
 async function connectToDatabase() {
   // If already connected, return cached connection
   if (cachedClient && cachedDb) {
-    console.log('📦 Using cached MongoDB connection');
     return { client: cachedClient, db: cachedDb };
   }
 
   try {
-    let mongoUri;
-
-    // Check if using mock database for local development
-    if (process.env.USE_MOCK_DB === 'true') {
-      console.log('🔄 Starting in-memory MongoDB server...');
-      mongoServer = await MongoMemoryServer.create();
-      mongoUri = mongoServer.getUri();
-      console.log('✅ Mock MongoDB started (in-memory)');
-    } else {
-      mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
-      if (!mongoUri) {
-        throw new Error('MONGO_URI or MONGODB_URI not found in environment variables');
-      }
+    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+    
+    // Use mock database if explicitly requested or if no URI provided
+    if (process.env.USE_MOCK_DB === 'true' || !mongoUri) {
+      console.log('🔄 Starting mock in-memory database...');
+      isMockMode = true;
+      await mockDatabase.connect();
+      cachedClient = mockDatabase;
+      cachedDb = mockDatabase;
+      console.log('✅ Mock Database Ready (no external connection needed)');
+      return { client: cachedClient, db: cachedDb };
     }
 
-    // Connect to MongoDB with optimized settings for serverless
+    // Try to connect to MongoDB Atlas
+    console.log('🔄 Connecting to MongoDB Atlas...');
     const client = await mongoose.connect(mongoUri, {
       maxPoolSize: 10,
       minPoolSize: 5,
@@ -43,30 +41,32 @@ async function connectToDatabase() {
     cachedClient = client;
     cachedDb = client.connection;
 
-    const dbType = process.env.USE_MOCK_DB === 'true' ? 'Mock (In-Memory)' : 'MongoDB Atlas';
-    console.log(`✅ MongoDB Connected (${dbType})`);
-    
+    console.log('✅ MongoDB Connected (MongoDB Atlas)');
     return { client: cachedClient, db: cachedDb };
   } catch (error) {
-    console.error('❌ MongoDB Connection Error:', error.message);
-    throw error;
+    console.warn('⚠️  MongoDB Atlas connection failed:', error.message);
+    console.log('💡 Falling back to mock database for local development...\n');
+    
+    isMockMode = true;
+    await mockDatabase.connect();
+    cachedClient = mockDatabase;
+    cachedDb = mockDatabase;
+    
+    return { client: cachedClient, db: cachedDb };
   }
 }
 
 // Graceful shutdown
 async function disconnectDatabase() {
-  if (cachedClient) {
-    await mongoose.disconnect();
-    cachedClient = null;
-    cachedDb = null;
+  if (isMockMode) {
+    await mockDatabase.disconnect();
+  } else if (cachedClient) {
+    await require('mongoose').disconnect();
   }
-  if (mongoServer) {
-    await mongoServer.stop();
-    mongoServer = null;
-  }
-  console.log('📴 MongoDB disconnected');
+  cachedClient = null;
+  cachedDb = null;
 }
 
 module.exports = connectToDatabase;
 module.exports.disconnect = disconnectDatabase;
-module.exports.mongoServer = () => mongoServer;
+module.exports.isMockMode = () => isMockMode;

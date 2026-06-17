@@ -5,7 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "USE_MOCK_DB=true nodemon server.js",
+    "dev": "nodemon server.js",
+    "dev:mock": "SET USE_MOCK_DB=true && npm run dev",
     "seed": "node seed/seed.js",
     "test-mongo": "node test-db.js"
   },
@@ -20,7 +21,6 @@
     "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
-    "mongodb-memory-server": "^9.1.6",
     "nodemon": "^3.1.4"
   }
 }
