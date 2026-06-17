@@ -1,5 +1,7 @@
 const Fee = require('../models/Fee');
 
+const FeeRecord = Fee;
+
 function recompute(doc) {
   let total = 0, pending = 0;
   for (const m of Fee.MONTHS) {

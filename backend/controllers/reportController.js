@@ -2,6 +2,9 @@ const Area = require('../models/Area');
 const Student = require('../models/Student');
 const Fee = require('../models/Fee');
 
+const Member = Student;
+const FeeRecord = Fee;
+
 exports.areaReport = async (req, res) => {
   const { areaId } = req.params;
   const year = Number(req.query.year) || new Date().getFullYear();

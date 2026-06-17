@@ -12,7 +12,7 @@ async function connectToDatabase() {
 
   try {
     // Connect to MongoDB with optimized settings for serverless
-    const client = await mongoose.connect(process.env.MONGO_URI, {
+    const client = await mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI, {
       maxPoolSize: 10,
       minPoolSize: 5,
       socketTimeoutMS: 45000,

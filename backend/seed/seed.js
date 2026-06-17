@@ -1,4 +1,6 @@
 require('dotenv').config();
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Area = require('../models/Area');
@@ -6,7 +8,7 @@ const Student = require('../models/Student');
 const Fee = require('../models/Fee');
 
 (async () => {
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(process.env.MONGODB_URI || process.env.MONGO_URI);
   console.log('Connected. Seeding...');
 
   await Promise.all([User.deleteMany(), Area.deleteMany(), Student.deleteMany(), Fee.deleteMany()]);
@@ -16,11 +18,14 @@ const Fee = require('../models/Fee');
   const area1 = await Area.create({ areaName: 'Green Valley', chairmanName: 'Mr. John Smith', chairmanSignature: '' });
   const area2 = await Area.create({ areaName: 'Sunrise Heights', chairmanName: 'Mr. David Lee', chairmanSignature: '' });
 
-  const students = await Student.create([
+  const students = [];
+  for (const s of [
     { memberName: 'Ali Khan', fatherName: 'Ahmed Khan', areaId: area1._id },
     { memberName: 'Sara Ahmed', fatherName: 'Imran Ahmed', areaId: area1._id },
     { memberName: 'Bilal Raza', fatherName: 'Zafar Raza', areaId: area2._id },
-  ]);
+  ]) {
+    students.push(await Student.create(s));
+  }
 
   const year = new Date().getFullYear();
   const MONTHS = Fee.MONTHS;

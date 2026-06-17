@@ -4,7 +4,7 @@ const Student = require('../models/Student');
 exports.list = async (_req, res) => {
   const areas = await Area.find().sort({ createdAt: -1 }).lean();
   const withCount = await Promise.all(areas.map(async a => ({
-    ...a, totalMembers: await Member.countDocuments({ areaId: a._id })
+    ...a, totalMembers: await Student.countDocuments({ areaId: a._id })
   })));
   res.json(withCount);
 };
@@ -31,6 +31,6 @@ exports.update = async (req, res) => {
 
 exports.remove = async (req, res) => {
   await Area.findByIdAndDelete(req.params.id);
-  await Member.deleteMany({ areaId: req.params.id });
+  await Student.deleteMany({ areaId: req.params.id });
   res.json({ ok: true });
 };
